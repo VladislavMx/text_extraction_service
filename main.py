@@ -7,6 +7,7 @@ app = FastAPI()
 ocr_service = OCRService()
 
 @app.post("/ocr")
+
 async def ocr_endpoint(file: UploadFile = File(...)):
     image_bytes = await file.read()
     image = Image.open(BytesIO(image_bytes)).convert("RGB")

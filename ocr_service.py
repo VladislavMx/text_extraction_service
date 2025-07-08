@@ -5,6 +5,7 @@ from io import BytesIO
 import torch
 
 """
+
 logging.basicConfig(
     filename="app/ocr_service.log",
     level=logging.INFO,
