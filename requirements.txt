@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+pillow~=11.3.0
+requests
+pyTelegramBotAPI~=4.27.0
+transformers~=4.53.1
