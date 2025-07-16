@@ -1,25 +1,30 @@
 import logging
 from transformers import AutoTokenizer, AutoProcessor, AutoModelForImageTextToText
 from PIL import Image
-from io import BytesIO
 import torch
+from config import MODEL_NAME, MAX_NEW_TOKENS
+from jinja2 import Environment, FileSystemLoader
 
-"""
+
 
 logging.basicConfig(
     filename="app/ocr_service.log",
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
-)"""
+)
+
+logger = logging.getLogger(__name__)
 
 class OCRService:
-    def __init__(self, model_path="nanonets/Nanonets-OCR-s"):
+    def __init__(self, model_path=MODEL_NAME):
+
+        logger.info(model_path)
+
         try:
 
             self.model = AutoModelForImageTextToText.from_pretrained(
                 model_path,
-                torch_dtype=torch.float32,
-                device_map="cpu"
+                torch_dtype=torch.float32
             )
             self.model.eval()
 
@@ -31,11 +36,12 @@ class OCRService:
 
             raise
 
-    def predict(self, image: Image.Image, max_new_tokens=4096) -> str:
+    def predict(self, image: Image.Image, MAX_NEW_TOKENS) -> str:
         try:
 
-
-            prompt = """Extract the text from the above document as if you were reading it naturally. Return the tables in html format. Return the equations in LaTeX representation. If there is an image in the document and image caption is not present, add a small description of the image inside the <img></img> tag; otherwise, add the image caption inside <img></img>. Watermarks should be wrapped in brackets. Ex: <watermark>OFFICIAL COPY</watermark>. Page numbers should be wrapped in brackets. Ex: <page_number>14</page_number> or <page_number>9/22</page_number>. Prefer using ☐ and ☑ for check boxes."""
+            template_env = Environment(loader=FileSystemLoader("core/templates"))
+            prompt_template = template_env.get_template("ocr_prompt.j2")
+            prompt = prompt_template.render()
 
             messages = [
                 {"role": "system", "content": "You are a helpful assistant."},
