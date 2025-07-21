@@ -1,14 +1,22 @@
-FROM python:3.10-slim
+FROM python:3.10-slim AS builder
 
-RUN pip install --upgrade pip
 WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libffi-dev \
+    libssl-dev \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+FROM python:3.10-slim
 
 RUN apt-get update && apt-get install -y git
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY --from=builder /install /usr/local
 
 EXPOSE 8000
 
