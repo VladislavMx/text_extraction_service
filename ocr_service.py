@@ -5,6 +5,7 @@ import torch
 from config import MODEL_NAME, MAX_NEW_TOKENS
 from jinja2 import Environment, FileSystemLoader
 import cv2
+import re
 
 
 logging.basicConfig(
@@ -31,6 +32,25 @@ class OCRService:
 
         except Exception as e:
             raise
+
+    def sensibility(text, min_words=5, gibberish_threshold=0.4):
+
+
+        cleaned_text = re.sub(r'[^a-zA-Zа-яА-Я ]', '', text)
+        words = cleaned_text.split()
+
+        if len(words) < min_words:
+                return False
+
+
+        gibberish_chars = sum(1 for c in text if
+                                  c not in string.ascii_letters + string.digits + string.punctuation + string.whitespace + 'абвгдеёжзийклмнопрстуфхцчшщъыьэюяАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ')
+        gibberish_ratio = gibberish_chars / max(1, len(text))
+
+        if gibberish_ratio > gibberish_threshold:
+            return False
+
+        return True
 
     def preprocess_image(self, image):
         lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
@@ -72,6 +92,8 @@ class OCRService:
 
             output_text = self.processor.batch_decode(generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=True)
 
+            if not self.sensibility(output_text):
+                return("Пожалуйста, пришлите изображение в лучшем качестве")
 
             return output_text[0]
 
