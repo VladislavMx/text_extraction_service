@@ -1,8 +1,20 @@
-FROM nvidia/cuda:12.1.0-base-ubuntu20.04
+FROM nvidia/cuda:12.1.0-devel-ubuntu20.04
 
-RUN apt-get update && apt-get install -y git python3-pip wget && apt-get clean
+# Установка основных зависимостей для сборки Python пакетов
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3-pip \
+    python3-dev \
+    build-essential \
+    git \
+    wget \
+    curl \
+    libffi-dev \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --upgrade pip
-RUN pip install vllm[openai]==0.9.2
+RUN pip3 install --upgrade pip setuptools wheel
+
+# Установка vllm с openai
+RUN pip3 install vllm[openai]
 
 CMD ["python3", "-m", "vllm.entrypoints.openai.api_server", "--model", "nanonets/Nanonets-OCR-s"]

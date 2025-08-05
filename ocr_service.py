@@ -7,11 +7,15 @@ import requests
 from transformers import AutoTokenizer, AutoProcessor, AutoModelForImageTextToText
 from PIL import Image
 import torch
-from config import MODEL_NAME, MAX_NEW_TOKENS, ERROR_ANSWER, MODEL_TEMPERATURE, MIN_WORDS
+from config import MODEL_NAME
 from jinja2 import Environment, FileSystemLoader
 import cv2
 import re
 
+MAX_NEW_TOKENS = 15000
+ERROR_ANSWER = "Пожалуйста, пришлите изображение в лучшем качестве"
+MODEL_TEMPERATURE = 0.2
+MIN_WORDS = 5
 
 logging.basicConfig(
     filename="app/ocr_service.log",
@@ -36,25 +40,11 @@ class LLM:
         self.api_url = api_url.rstrip("/") + "/v1/chat/completions"
         self.api_key = api_key
 
-    def chat_completion(self, messages, temperature=0.2):
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}" if self.api_key else None
-        }
 
-        payload = {
-            "model": MODEL_NAME,
-            "messages": messages,
-            "temperature": MODEL_TEMPERATURE,
-            "max_tokens": MAX_NEW_TOKENS
-        }
-
-        response = requests.post(self.api_url, headers=headers, json=payload)
-        response.raise_for_status()
-        return response.json()
 
 class OCRService:
     def __init__(self, llm_client):
+        self.api_key = ""
         self.llm = llm_client
         self.template_env = Environment(loader=FileSystemLoader("core/templates"))
         logger.info(MODEL_NAME)
@@ -72,6 +62,26 @@ class OCRService:
         except Exception as e:
             raise
 
+    def chat_completion(self, messages):
+        headers = {
+            "Content-Type": "application/json"
+        }
+
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+
+        payload = {
+            "model": "nanonets/Nanonets-OCR-s",
+            "messages": messages,
+            "max_tokens": MAX_NEW_TOKENS,
+            "temperature": MODEL_TEMPERATURE,
+        }
+
+        response = requests.post(self.api_url, headers=headers, json=payload)
+        response.raise_for_status()
+
+        return response.json()
+
     def image_to_base64(image: Image.Image) -> str:
         buffered = BytesIO()
         image.save(buffered, format="PNG")
@@ -84,11 +94,10 @@ class OCRService:
         cleaned_text = TEXT_CLEAN_RE.sub('', output_text)
         words = cleaned_text.split()
 
-        if len(words) < MIN_WORDS:
-            return False
-
         gibberish_chars = sum(1 for c in output_text if c not in ALLOWED_CHARS)
-        if len(output_text) == 0:
+        gibberish_ratio = gibberish_chars / len(output_text)
+
+        if gibberish_ratio > 0.6:
             return False
 
         return True
@@ -120,12 +129,12 @@ class OCRService:
             messages = [
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": [
-                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_b64}"}},
+                    {"type": "image_url", "image_url": img_b64},
                     {"type": "text", "text": prompt},
                 ]},
             ]
 
-            response = self.llm.chat_completion(messages, MAX_NEW_TOKENS)
+            response = self.llm.chat_completion(messages)
 
             output_text = response["choices"][0]["message"]["content"]
 
