@@ -1,0 +1,19 @@
+services:
+  image2text:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - OCR_API_URL=http://ocr-model:8500
+    depends_on:
+      - ocr-model
+
+  ocr-model:
+    build:
+      context: ./ocr_model
+      dockerfile: Dockerfile
+    ports:
+      - "8500:8500"
+
