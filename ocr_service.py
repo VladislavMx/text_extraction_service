@@ -3,19 +3,19 @@ import string
 import base64
 from io import BytesIO
 import requests
+from pydantic import BaseSettings
+
+from config import MAX_NEW_TOKENS, ERROR_ANSWER, MODEL_TEMPERATURE, MIN_WORDS, TEXT_CLEAN_RE
+
+import preprocessing
 
 from transformers import AutoTokenizer, AutoProcessor, AutoModelForImageTextToText
 from PIL import Image
 import torch
 from config import MODEL_NAME
 from jinja2 import Environment, FileSystemLoader
-import cv2
 import re
-
-MAX_NEW_TOKENS = 15000
-ERROR_ANSWER = "Пожалуйста, пришлите изображение в лучшем качестве"
-MODEL_TEMPERATURE = 0.2
-MIN_WORDS = 5
+import streamlit as st
 
 logging.basicConfig(
     filename="app/ocr_service.log",
@@ -31,14 +31,16 @@ ALLOWED_CHARS = set(
     'абвгдеёжзийклмнопрстуфхцчшщъыьэюяАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ'
 )
 
-TEXT_CLEAN_RE = re.compile(r'[^a-zA-Zа-яА-Я ]')
-
 logger = logging.getLogger(__name__)
 
-class LLM:
-    def __init__(self, api_url: str, api_key: str = ""):
-        self.api_url = api_url.rstrip("/") + "/v1/chat/completions"
-        self.api_key = api_key
+
+class Settings(BaseSettings):
+    api_url: str = "https://api.openai.com"
+    openai_key: str
+
+    class Config:
+        env_file = ".env"
+
 
 
 
@@ -48,6 +50,10 @@ class OCRService:
         self.llm = llm_client
         self.template_env = Environment(loader=FileSystemLoader("core/templates"))
         logger.info(MODEL_NAME)
+
+        self.settings = Settings()
+        self.api_url = self.settings.api_url.rstrip("/") + "/v1/chat/completions"
+        self.api_key = self.settings.openai_key
 
         try:
             self.model = AutoModelForImageTextToText.from_pretrained(
@@ -84,8 +90,11 @@ class OCRService:
 
     def image_to_base64(image: Image.Image) -> str:
         buffered = BytesIO()
-        image.save(buffered, format="PNG")
-        return base64.b64encode(buffered.getvalue()).decode("utf-8")
+        try:
+            image.save(buffered, format="PNG")
+            return base64.b64encode(buffered.getvalue()).decode("utf-8")
+        finally:
+            buffered.close()
 
     def check_context(self, output_text):
         if not output_text:
@@ -102,25 +111,41 @@ class OCRService:
 
         return True
 
-    def preprocess_image(self, image):
-        lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
-        l, a, b = cv2.split(lab)
-        clahe = cv2.createCLAHE(clipLimit=3.0)
-        cl = clahe.apply(l)
-        limg = cv2.merge((cl, a, b))
-        image = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
+    def preprocess(img):
+        a, col0, b = st.columns([1, 20, 1])
+        col1, col2, col3 = st.columns([1, 1, 1])
+        col4, col5, col6 = st.columns([1, 1, 1])
 
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        _, binary = cv2.threshold(gray, 180, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        denoised = cv2.fastNlMeansDenoising(binary, h=30)
+        img = preprocessing.convert_img(img)
 
-        pil_image = Image.fromarray(denoised)
-        return pil_image
+        with col2.container(border=True):
+            st.image(img, output_format="auto", caption="original image")
+
+        img = preprocessing.normalize_img(img)
+        with col4.container(border=True):
+            st.image(img, output_format="auto", caption="normalized image")
+
+        img = preprocessing.grayscale_img(img)
+        with col5.container(border=True):
+            st.image(img, output_format="auto", caption="grayscale image")
+
+        img = preprocessing.denoise_img(img)
+
+        img = preprocessing.deskew_img(img)
+        with col6.container(border=True):
+            st.image(img, output_format="auto", caption="deskew image")
+
+        img = preprocessing.threshold_img(img, threshold_val=40)
+        with col3.container(border=True):
+            st.image(img, output_format="auto", caption="threshold image")
+
+        img = Image.fromarray(img)
+        return img
 
 
     def predict(self, image: Image.Image) -> str:
         try:
-            image = self.preprocess_image(image)
+            image = self.preprocess(image)
             img_b64 = self.image_to_base64(image)
 
             prompt_template = self.template_env.get_template("prompt.j2")

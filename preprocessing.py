@@ -6,12 +6,7 @@ import numpy as np
 from typing import Tuple
 from deskew import determine_skew
 
-BILATERAL_FILTER_DIAMETER = 5
-BILATERAL_FILTER_SIGMA_COLOR = 55
-BILATERAL_FILTER_SIGMA_SPACE = 60
-
-ADAPTIVE_THRESH_BLOCK_SIZE = 21
-ADAPTIVE_THRESH_C = 4
+from config import BILATERAL_FILTER_DIAMETER, BILATERAL_FILTER_SIGMA_COLOR, BILATERAL_FILTER_SIGMA_SPACE, ADAPTIVE_THRESH_BLOCK_SIZE,  ADAPTIVE_THRESH_C
 
 
 def deskew_img(image: np.ndarray) -> np.ndarray:
@@ -61,33 +56,3 @@ def threshold_img(img: np.ndarray, threshold_val: int) -> np.ndarray:
     thresh = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, ADAPTIVE_THRESH_BLOCK_SIZE, ADAPTIVE_THRESH_C)
     return thresh
 
-def preprocess(img):
-  a, col0, b = st.columns([1, 20, 1])
-  col1, col2, col3 = st.columns([1, 1, 1])
-  col4, col5, col6 = st.columns([1, 1, 1])
-
-
-  img = convert_img(img)
-  with col2.container(border=True):
-      st.image(img, output_format="auto", caption="original image")
-
-  img = normalize_img(img)
-  with col4.container(border=True):
-      st.image(img, output_format="auto", caption="normalized image")
-
-  img = grayscale_img(img)
-  with col5.container(border=True):
-      st.image(img, output_format="auto", caption="grayscale image")
-
-  img = denoise_img(img)
-
-  img = deskew_img(img)
-  with col6.container(border=True):
-      st.image(img, output_format="auto", caption="deskew image")
-
-  img = threshold_img(img, threshold_val=40)
-  with col3.container(border=True):
-      st.image(img, output_format="auto", caption="threshold image")
-
-  img = Image.fromarray(img)
-  return img
